@@ -369,7 +369,6 @@ class OceanView: UIView {
     
     func setDepth(_ newDepth: Float) {
         print("OceanView: Setting depth to \(newDepth)")
-        // Scale the depth to make the movement more noticeable
         currentDepth = newDepth
         
         // Update uniforms with the new depth

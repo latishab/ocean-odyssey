@@ -84,19 +84,28 @@ float combinedWaves(float2 position, float time, float2 swellDir, float swellHei
     return primarySwell * 0.4 + crossingSwell * 0.2 + wave1 * 0.8 + wave2 * 0.5 + wave3 * 0.3;
 }
 
-// Add this helper function at the top with other utility functions
+// Update the calculateBallPosition function
 float2 calculateBallPosition(float2 uv, float depth, float waterLine, float time, float2 swellDirection, float swellHeight, float swellFrequency) {
-    // Keep ball at a fixed screen position (center)
-    float2 basePos = float2(0.5, 0.5);  // Center of screen
+    // Keep ball centered horizontally
+    float2 basePos = float2(0.5, 0.0);
     
-    // Apply wave effect at surface (when depth is 0)
-    if (depth <= 0.001) {  // Changed from 0.01 to 0.001 for more precise surface detection
-        // Start at water line and add wave motion
-        basePos.y = waterLine;  // Set initial position to water line
+    // For the sunlight zone (0-200m), we want the ball to move from water line to center
+    float normalizedDepth = depth;  // Already normalized 0-1
+    
+    // Calculate target Y position
+    float targetY;
+    if (normalizedDepth < 0.001) {
+        // At surface, use water line position
+        targetY = waterLine;
+        // Add wave motion only at surface
         float waveOffset = combinedWaves(basePos, time, swellDirection, swellHeight, swellFrequency);
-        basePos.y += waveOffset * 0.1;  // Add wave motion
+        targetY += waveOffset * 0.1;
+    } else {
+        // Below surface, smoothly move to and stay at center
+        targetY = mix(waterLine, 0.5, normalizedDepth);
     }
     
+    basePos.y = targetY;
     return basePos;
 }
 

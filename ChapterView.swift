@@ -75,10 +75,7 @@ struct ChapterView: View {
         case .deepSeaAdaptations:
             targetDepth = 1000.0 / 4000.0  // Start at 1000m
         }
-        
-        withAnimation(.easeInOut(duration: 1.0)) {
-            depth = targetDepth
-        }
+        depth = targetDepth
     }
     
     private func handleExperiment(_ experiment: Experiment, value: Float) {
