@@ -48,7 +48,7 @@ class OceanView: UIView {
     private var swellPhase: Float = 0.0
 
     private var boatTexture: MTLTexture?
-    private var boatPosition: SIMD2<Float> = SIMD2<Float>(0.5, 0.5)   // Center position
+    private var boatPosition: SIMD2<Float> = SIMD2<Float>(0.9, 0.5)   // Changed from (0.5, 0.5) to (0.75, 0.5)
     private var boatSize: SIMD2<Float> = SIMD2<Float>(0.2, 0.1)     // Width is twice the height
 
     struct BoatUniforms {
@@ -368,16 +368,9 @@ class OceanView: UIView {
     }
     
     func setDepth(_ newDepth: Float) {
-        print("OceanView: Setting depth to \(newDepth)")
         currentDepth = newDepth
-        
-        // Update uniforms with the new depth
         if let uniforms = timeUniformsBuffer?.contents().assumingMemoryBound(to: TimeUniforms.self) {
-            print("OceanView: Updating Metal uniforms with depth: \(currentDepth)")
             uniforms.pointee.depth = currentDepth
-            uniforms.pointee.colorBallDepth = currentDepth
-            
-            // Force a redraw
             setNeedsDisplay()
         }
     }

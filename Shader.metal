@@ -14,13 +14,12 @@ struct VertexOut {
 };
 
 struct TimeUniforms {
-    float time;                   // Time for wave animation
-    float depth;                  // Depth for water animation
-    float2 swellDirection;        // Direction of the primary swell
-    float swellHeight;           // Height of the swell waves
-    float swellFrequency;        // Frequency of the swell pattern
-    float sunAngle;               // Sun angle for lighting
-    float colorBallDepth;
+    float time;
+    float depth;        // This controls both camera and ball position
+    float2 swellDirection;
+    float swellHeight;
+    float swellFrequency;
+    float sunAngle;
 };
 
 struct BoatUniforms {
@@ -89,20 +88,16 @@ float2 calculateBallPosition(float2 uv, float depth, float waterLine, float time
     // Keep ball centered horizontally
     float2 basePos = float2(0.5, 0.0);
     
-    // For the sunlight zone (0-200m), we want the ball to move from water line to center
-    float normalizedDepth = depth;  // Already normalized 0-1
+    // Calculate screen-space position for the ball
+    // waterLine moves up as we go deeper (0.5 + depth)
+    // ball should be proportionally below the water line based on depth
+    float screenSpaceDepth = depth;  // This is already normalized 0-1
+    float targetY = waterLine - screenSpaceDepth;  // Position relative to moving water line
     
-    // Calculate target Y position
-    float targetY;
-    if (normalizedDepth < 0.001) {
-        // At surface, use water line position
-        targetY = waterLine;
-        // Add wave motion only at surface
+    // Only add wave motion when very close to surface
+    if (depth < 0.001) {  // Reduced from 0.01 to make surface transition smoother
         float waveOffset = combinedWaves(basePos, time, swellDirection, swellHeight, swellFrequency);
         targetY += waveOffset * 0.1;
-    } else {
-        // Below surface, smoothly move to and stay at center
-        targetY = mix(waterLine, 0.5, normalizedDepth);
     }
     
     basePos.y = targetY;
@@ -244,11 +239,41 @@ float3 calculateColorAtDepth(float3 originalColor, float depth) {
     return originalColor * float3(redLoss, greenLoss, blueLoss);
 }
 
-// Add this function to draw a dashed line
-float drawDashedLine(float2 uv, float2 linePos, float dashLength, float gapLength) {
-    float distanceToLine = abs(uv.x - linePos.x);
-    float dashPattern = mod(uv.y, dashLength + gapLength);
-    return step(distanceToLine, 0.005) * step(dashPattern, dashLength);
+// Update the drawColorBall function
+float3 drawColorBall(float2 uv, float2 ballPos, float3 backgroundColor, float depth) {
+    if (length(uv - ballPos) < 0.05) {
+        // Create a striped ball with red, green, and blue
+        float3 color;
+        float stripe = fract((uv.x - ballPos.x) * 20.0);  // Create vertical stripes
+        
+        if (stripe < 0.33) {
+            color = float3(1.0, 0.2, 0.2);  // Red stripe
+        } else if (stripe < 0.66) {
+            color = float3(0.2, 1.0, 0.2);  // Green stripe
+        } else {
+            color = float3(0.2, 0.2, 1.0);  // Blue stripe
+        }
+        
+        // Scale depth to match water darkening (0-200m range)
+        float scaledDepth = depth * 200.0;
+        
+        // Water color at depth (blue-green tint)
+        float3 waterColor = float3(0.1, 0.3, 0.5);
+        
+        // Different absorption rates for each color
+        float redShift = exp(-scaledDepth * 0.15);     // Red shifts to water color first
+        float greenShift = exp(-scaledDepth * 0.075);  // Green shifts more slowly
+        float blueShift = exp(-scaledDepth * 0.04);    // Blue persists longest
+        
+        // Blend each color component towards water color
+        float3 depthAdjustedColor;
+        depthAdjustedColor.r = mix(waterColor.r, color.r, redShift);
+        depthAdjustedColor.g = mix(waterColor.g, color.g, greenShift);
+        depthAdjustedColor.b = mix(waterColor.b, color.b, blueShift);
+        
+        return depthAdjustedColor;
+    }
+    return backgroundColor;
 }
 
 // Fragment Shader: Renders water and sky with dynamic effects
@@ -262,6 +287,8 @@ fragment float4 waterFragmentShader(VertexOut in [[stage_in]], constant TimeUnif
         combinedWaves(uv, time, timeUniforms.swellDirection,
                      timeUniforms.swellHeight, timeUniforms.swellFrequency) * 0.2;
     
+    // Calculate base color (sky or water)
+    float3 finalColor;
     if (in.uv.y > waterLine) {  // Sky
         float skyGradient = (in.uv.y - waterLine) / (1.0 - waterLine);
         
@@ -299,37 +326,7 @@ fragment float4 waterFragmentShader(VertexOut in [[stage_in]], constant TimeUnif
         
         // Pure white clouds over light blue sky
         float3 cloudColor = float3(1.0, 1.0, 1.0);
-        float3 finalColor = mix(skyColor, cloudColor, clouds);
-        
-        // MARK: - Color Ball Demo
-        float2 ballPos = calculateBallPosition(uv, timeUniforms.colorBallDepth, waterLine,
-                                             time, timeUniforms.swellDirection,
-                                             timeUniforms.swellHeight, timeUniforms.swellFrequency);
-        
-        // First draw the ball
-        if (length(uv - ballPos) < 0.05) {
-            // Create a striped ball with red, green, and blue
-            float3 color;
-            float stripe = fract((uv.x - ballPos.x) * 20.0);  // Create vertical stripes
-            
-            if (stripe < 0.33) {
-                color = float3(1.0, 0.2, 0.2);  // Red stripe
-            } else if (stripe < 0.66) {
-                color = float3(0.2, 1.0, 0.2);  // Green stripe
-            } else {
-                color = float3(0.2, 0.2, 1.0);  // Blue stripe
-            }
-            
-            float3 depthAdjustedColor = calculateColorAtDepth(color, timeUniforms.colorBallDepth);
-            finalColor = mix(depthAdjustedColor, finalColor, timeUniforms.colorBallDepth * 0.7);
-        }
-        
-        // Then draw the dashed line
-        float dashedLine = drawDashedLine(uv, ballPos, 0.02, 0.02);  // Dash and gap length
-        float3 lineColor = float3(1.0, 1.0, 1.0);  // White line
-        finalColor = mix(finalColor, lineColor, dashedLine * 0.5);  // Reduced line intensity
-        
-        return float4(finalColor, 1.0);
+        finalColor = mix(skyColor, cloudColor, clouds);
     } else {  // Water
         // Calculate darkness based on depth with transition to pitch black at 200m
         float normalizedDepth = depth * 200.0;  // Convert from 0-1 to 0-200m range
@@ -351,7 +348,6 @@ fragment float4 waterFragmentShader(VertexOut in [[stage_in]], constant TimeUnif
         
         // Much more ambient light to maintain visibility
         float3 waterColorShallow = float3(0.1, 0.3, 0.5) * (depthDarkness + penetration * 0.8);
-        float3 waterColorDeep = float3(0.0, 0.05, 0.2) * (depthDarkness + 0.95);  // Even more ambient
         
         // Calculate sun ray direction
         float2 sunDir = float2(sin(timeUniforms.sunAngle), -cos(timeUniforms.sunAngle));
@@ -388,37 +384,14 @@ fragment float4 waterFragmentShader(VertexOut in [[stage_in]], constant TimeUnif
         float reflectedClouds = fbm(reflectedUV * float2(2.0, 1.0), time) * 0.1;
         waterColorShallow += float3(reflectedClouds);
         
-        // MARK: - Color Ball Demo
-        float2 ballPos = calculateBallPosition(uv, timeUniforms.colorBallDepth, waterLine,
-                                             time, timeUniforms.swellDirection,
-                                             timeUniforms.swellHeight, timeUniforms.swellFrequency);
-        
-        // First draw the ball
-        float3 finalColor = waterColorShallow;  // or skyColor depending on section
-        if (length(uv - ballPos) < 0.05) {
-            // Create a striped ball with red, green, and blue
-            float3 color;
-            float stripe = fract((uv.x - ballPos.x) * 20.0);  // Create vertical stripes
-            
-            if (stripe < 0.33) {
-                color = float3(1.0, 0.2, 0.2);  // Red stripe
-            } else if (stripe < 0.66) {
-                color = float3(0.2, 1.0, 0.2);  // Green stripe
-            } else {
-                color = float3(0.2, 0.2, 1.0);  // Blue stripe
-            }
-            
-            float3 depthAdjustedColor = calculateColorAtDepth(color, timeUniforms.colorBallDepth);
-            finalColor = mix(depthAdjustedColor, finalColor, timeUniforms.colorBallDepth * 0.7);
-        }
-        
-        // Then draw the dashed line
-        float dashedLine = drawDashedLine(uv, ballPos, 0.02, 0.02);  // Dash and gap length
-        float3 lineColor = float3(1.0, 1.0, 1.0);  // White line
-        finalColor = mix(finalColor, lineColor, dashedLine * 0.5);  // Reduced line intensity
-        
-        return float4(finalColor, 1.0);
+        finalColor = waterColorShallow;
     }
+    
+    // Draw ball at a fixed screen position, offset by depth
+    float2 ballPos = float2(0.5, 0.5 - depth);
+    finalColor = drawColorBall(uv, ballPos, finalColor, depth);
+    
+    return float4(finalColor, 1.0);
 }
 
 // Add new vertex shader for the boat
@@ -454,7 +427,7 @@ vertex VertexOut boatVertexShader(VertexIn in [[stage_in]],
     );
     
     float2 scaled = rotated * boat.size;
-    float2 positioned = scaled + boat.position;
+    float2 positioned = scaled + float2(0.9, boat.position.y);
     
     // Adjust boat height to match water line with a slight upward offset
     float waterLine = 0.5 + timeUniforms.depth +
