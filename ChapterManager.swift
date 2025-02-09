@@ -44,8 +44,25 @@ class ChapterManager: ObservableObject {
     }
     
     func setChapter(_ chapter: Chapter) {
+        let previousChapter = currentChapter
         currentChapter = chapter
-        // Reset discoveries to show only current chapter's discoveries
+        
+        // Maintain depth when transitioning from color to pressure chapter
+        if previousChapter == .colorAndLight && chapter == .pressureAndLife && depth >= (190.0/200.0) {
+            // Keep current depth
+        } else {
+            // Set default depths for other transitions
+            switch chapter {
+            case .colorAndLight:
+                depth = 0.0
+            case .pressureAndLife:
+                depth = 200.0 / 4000.0
+            case .deepSeaAdaptations:
+                depth = 1000.0 / 4000.0
+            }
+        }
+        
+        // Update discoveries
         switch chapter {
         case .colorAndLight:
             discoveries = colorDiscoveries
@@ -62,7 +79,6 @@ class ChapterManager: ObservableObject {
     ///   - value: Normalized depth value (0-1) where 1.0 = 200m for this experiment
     /// - Note: Value is already normalized from ExperimentView, do not normalize again
     private func handleColorBallInteraction(element: InteractiveElement, value: Float) {
-        print("ChapterManager: Setting normalized depth to \(value)")
         depth = value  // Direct use of normalized value
         delegate?.didUpdateColorBallDepth(value)
         

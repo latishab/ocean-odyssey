@@ -11,6 +11,8 @@ struct ExperimentView: View {
     @State private var pressureAnswer: String = ""
     @State private var feedbackMessage: String = ""
     @State private var isCorrect: Bool = false
+    @FocusState private var isTextFieldFocused: Bool
+    @State private var cursorPosition: Int = 0
     
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
@@ -42,7 +44,6 @@ struct ExperimentView: View {
                                 // This normalized value flows through the entire system
                                 // Do not normalize again in ChapterManager
                                 let actualDepth = newValue * 200  // For display only
-                                print("ExperimentView: Depth \(actualDepth)m (normalized: \(newValue))")
                                 depthText = String(format: "%.1fm", actualDepth)
                                 onValueChanged(newValue)  // Pass normalized value
                             }
@@ -70,19 +71,21 @@ struct ExperimentView: View {
                             .foregroundColor(.white)
                         
                         HStack {
-                            // Auto-complete keyboard options
-                            Picker("Calculation", selection: $selectedFormula) {
-                                Text("Depth ÷ 10 + 1").tag(PressureFormula.basic)
-                                Text("(Depth × 0.1) + 1").tag(PressureFormula.decimal)
-                                Text("Depth/10 + 1 ATM").tag(PressureFormula.atmospheric)
-                            }
-                            .pickerStyle(.menu)
-                            .foregroundColor(.white)
-                            
                             TextField("Enter pressure", text: $pressureAnswer)
                                 .keyboardType(.decimalPad)
                                 .textFieldStyle(.roundedBorder)
-                                .frame(width: 100)
+                                .frame(width: 200)
+                                .focused($isTextFieldFocused)
+                                .overlay(
+                                    // Custom shortcut bar
+                                    ShortcutBar(commands: [
+                                        "depth/10 + 1",
+                                        "depth × 0.1 + 1",
+                                        "(depth + 10)/10"
+                                    ]) { formula in
+                                        pressureAnswer = formula
+                                    }
+                                )
                             
                             Text("ATM")
                                 .foregroundColor(.white)
@@ -152,8 +155,57 @@ struct ExperimentView: View {
     }
 }
 
+// MARK: - Formula Buttons
+struct FormulaButton: View {
+    let text: String
+    let action: () -> Void
+    
+    var body: some View {
+        Button(action: action) {
+            Text(text)
+                .padding(.horizontal, 12)
+                .padding(.vertical, 8)
+                .background(Color.blue.opacity(0.2))
+                .cornerRadius(8)
+                .foregroundColor(.white)
+        }
+    }
+}
+
 enum PressureFormula {
     case basic      // "Depth ÷ 10 + 1"
     case decimal    // "(Depth × 0.1) + 1"
     case atmospheric // "Depth/10 + 1 ATM"
+}
+
+// Add this new view for the shortcut bar
+struct ShortcutBar: View {
+    let commands: [String]
+    let onSelect: (String) -> Void
+    
+    var body: some View {
+        HStack(spacing: 0) {
+            ForEach(commands, id: \.self) { command in
+                Button(action: { onSelect(command) }) {
+                    Text(command)
+                        .font(.system(.body, design: .monospaced))
+                        .foregroundColor(.primary)
+                        .padding(.horizontal, 12)
+                        .padding(.vertical, 8)
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                
+                if command != commands.last {
+                    Color.gray.opacity(0.3)
+                        .frame(width: 1)
+                        .frame(maxHeight: .infinity)
+                }
+            }
+        }
+        .background(Color(uiColor: .systemBackground))
+        .cornerRadius(8)
+        .shadow(color: .black.opacity(0.1), radius: 2, y: 1)
+        .frame(height: 44)
+    }
 }

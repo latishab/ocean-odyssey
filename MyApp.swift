@@ -28,8 +28,7 @@ struct OceanViewRepresentable: UIViewRepresentable {
     }
     
     func updateUIView(_ uiView: OceanView, context: Context) {
-        print("OceanViewRepresentable: Updating OceanView with depth: \(depth)")
-        uiView.setDepth(depth)
+        uiView.setDepth(depth)  // This gets called whenever depth changes
     }
     
     func getOceanView() -> OceanView? {
@@ -75,7 +74,6 @@ struct ContentView: View {
                     depth: depth * 200,
                     yPosition: 0.5
                 )
-                .frame(width: geometry.size.width * 0.5)
                 .offset(x: geometry.size.width * 0.5)
             }
         }

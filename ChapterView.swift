@@ -58,7 +58,6 @@ struct ChapterView: View {
             }
         }
         .onReceive(chapterManager.$depth) { newDepth in
-            print("ChapterView: Received depth change: \(newDepth)")
             withAnimation(.easeInOut(duration: 0.5)) {
                 self.depth = newDepth
             }
@@ -71,15 +70,23 @@ struct ChapterView: View {
         case .colorAndLight:
             targetDepth = 0.0  // Start at surface
         case .pressureAndLife:
-            targetDepth = 200.0 / 4000.0  // Start at 200m
+            if currentChapter == .colorAndLight && depth >= (190.0/200.0) {
+                targetDepth = depth  // Keep current depth
+            } else {
+                targetDepth = 200.0 / 4000.0  // Otherwise start at 200m
+            }
         case .deepSeaAdaptations:
+            if currentChapter == .pressureAndLife && depth >= (3900.0/4000.0) {
+                targetDepth = depth  // Keep current depth
+            } else {
+                targetDepth = 1000.0 / 4000.0  // Otherwise start at 200m
+            }
             targetDepth = 1000.0 / 4000.0  // Start at 1000m
         }
         depth = targetDepth
     }
     
     private func handleExperiment(_ experiment: Experiment, value: Float) {
-        print("ChapterView: Handling experiment interaction with value: \(value)")
         chapterManager.handleInteraction(
             element: InteractiveElement(title: experiment.title, type: .slider),
             value: value
@@ -90,6 +97,8 @@ struct ChapterView: View {
 // Helper Views
 struct ChapterNavigationView: View {
     @Binding var currentChapter: Chapter
+    // Note: onChapterChange is kept for future use but not called during chapter navigation
+    // to prevent double depth updates with setChapter
     let onChapterChange: (Chapter) -> Void
     @ObservedObject var chapterManager: ChapterManager
     
@@ -100,7 +109,6 @@ struct ChapterNavigationView: View {
                     if let previous = Chapter(rawValue: currentChapter.rawValue - 1) {
                         currentChapter = previous
                         chapterManager.setChapter(previous)
-                        onChapterChange(previous)
                     }
                 }
             }) {
@@ -123,7 +131,6 @@ struct ChapterNavigationView: View {
                     if let next = Chapter(rawValue: currentChapter.rawValue + 1) {
                         currentChapter = next
                         chapterManager.setChapter(next)
-                        onChapterChange(next)
                     }
                 }
             }) {

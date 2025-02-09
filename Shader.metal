@@ -239,7 +239,7 @@ float3 calculateColorAtDepth(float3 originalColor, float depth) {
     return originalColor * float3(redLoss, greenLoss, blueLoss);
 }
 
-// Update the drawColorBall function
+// Update the drawColorBall function to ensure colors are fully absorbed by 200m
 float3 drawColorBall(float2 uv, float2 ballPos, float3 backgroundColor, float depth) {
     if (length(uv - ballPos) < 0.05) {
         // Create a striped ball with red, green, and blue
@@ -254,24 +254,25 @@ float3 drawColorBall(float2 uv, float2 ballPos, float3 backgroundColor, float de
             color = float3(0.2, 0.2, 1.0);  // Blue stripe
         }
         
-        // Scale depth to match water darkening (0-200m range)
-        float scaledDepth = depth * 200.0;
+        float scaledDepth = depth * 200.0;  // Convert to meters
         
-        // Water color at depth (blue-green tint)
-        float3 waterColor = float3(0.1, 0.3, 0.5);
+        // Water color that colors will shift towards (more blue than green)
+        float3 waterColor = float3(0.0, 0.2, 0.8);  // Adjusted to be more blue
         
-        // Different absorption rates for each color
-        float redShift = exp(-scaledDepth * 0.15);     // Red shifts to water color first
-        float greenShift = exp(-scaledDepth * 0.075);  // Green shifts more slowly
-        float blueShift = exp(-scaledDepth * 0.04);    // Blue persists longest
+        // Much more gradual absorption based on the reference image
+        float redAbsorption = 1.0 - smoothstep(5.0, 40.0, scaledDepth);     // Red visible longer
+        float greenAbsorption = 1.0 - smoothstep(30.0, 80.0, scaledDepth);  // Green persists much longer
+        float blueAbsorption = 1.0 - smoothstep(60.0, 150.0, scaledDepth);  // Blue stays visible longest
         
-        // Blend each color component towards water color
+        // Mix each color component with water color based on depth
         float3 depthAdjustedColor;
-        depthAdjustedColor.r = mix(waterColor.r, color.r, redShift);
-        depthAdjustedColor.g = mix(waterColor.g, color.g, greenShift);
-        depthAdjustedColor.b = mix(waterColor.b, color.b, blueShift);
+        depthAdjustedColor.r = mix(waterColor.r, color.r, redAbsorption);
+        depthAdjustedColor.g = mix(waterColor.g, color.g, greenAbsorption);
+        depthAdjustedColor.b = mix(waterColor.b, color.b, blueAbsorption);
         
-        return depthAdjustedColor;
+        // Much more gradual overall darkening
+        float lightPenetration = 1.0 - smoothstep(150.0, 200.0, scaledDepth);  // Start darkening much later
+        return depthAdjustedColor * mix(0.3, 1.0, lightPenetration);  // Don't go completely dark
     }
     return backgroundColor;
 }
@@ -387,8 +388,18 @@ fragment float4 waterFragmentShader(VertexOut in [[stage_in]], constant TimeUnif
         finalColor = waterColorShallow;
     }
     
-    // Draw ball at a fixed screen position, offset by depth
-    float2 ballPos = float2(0.5, 0.5 - depth);
+    // Calculate ball position with wave motion near surface
+    float2 ballPos = float2(0.5, 0.5);  // Base position at center
+
+    // Add wave motion only when near surface (first 5% of depth)
+    if (depth < 0.05) {
+        float waveOffset = combinedWaves(ballPos, time, timeUniforms.swellDirection,
+                                       timeUniforms.swellHeight, timeUniforms.swellFrequency);
+        // Reduce wave effect as we go deeper
+        float waveInfluence = 1.0 - (depth / 0.05);  // Goes from 1.0 to 0.0
+        ballPos.y += waveOffset * 0.1 * waveInfluence;  // Scale wave effect
+    }
+
     finalColor = drawColorBall(uv, ballPos, finalColor, depth);
     
     return float4(finalColor, 1.0);
