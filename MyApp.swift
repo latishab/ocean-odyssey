@@ -28,7 +28,7 @@ struct OceanViewRepresentable: UIViewRepresentable {
     }
     
     func updateUIView(_ uiView: OceanView, context: Context) {
-        uiView.setDepth(depth)  // This gets called whenever depth changes
+        uiView.setDepth(depth)  
     }
     
     func getOceanView() -> OceanView? {

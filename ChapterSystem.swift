@@ -65,13 +65,37 @@ enum Chapter: Int, CaseIterable {
         case .pressureAndLife:
             return [
                 Experiment(
-                    title: "Pressure Visualization",
+                    title: "Exploring Pressure",
                     description: """
-                        As we descend, watch how pressure increases dramatically. 
-                        Every 10 meters of depth adds another atmosphere of pressure - 
-                        that's like adding the weight of Earth's entire atmosphere!
+                        Let's understand how water pressure changes as we go deeper.
+                        
+                        Watch the pressure gauge as we descend. Notice how:
+                        - We start with 1 ATM at the surface
+                        - Every 10 meters adds 1 more ATM of pressure
+                        - At 30m depth, there's 4 ATM of pressure (1 + 3)
+                        
+                        Move the slider to explore different depths and observe
+                        the pressure changes.
                         """,
-                    interaction: .pressureDemo(name: "Depth", range: 200...1000)
+                    interaction: .pressureDemo(name: "Observe", range: 0...50)
+                ),
+                Experiment(
+                    title: "Calculating Pressure",
+                    description: """
+                        Now that you understand how pressure increases with depth,
+                        let's practice calculating it!
+                        
+                        Remember the pattern:
+                        - Start with 1 ATM (surface pressure)
+                        - Add 1 ATM for every 10m of depth
+                        
+                        Formula: Pressure = (depth ÷ 10) + 1 ATM
+                        
+                        Example: At 20m depth
+                        - Depth ÷ 10 = 20 ÷ 10 = 2
+                        - Add 1 ATM = 2 + 1 = 3 ATM total
+                        """,
+                    interaction: .pressureCalculation(name: "Practice", range: 10...100)
                 )
             ]
         case .deepSeaAdaptations:
@@ -100,6 +124,7 @@ struct Experiment {
     enum Interaction {
         case sunlightZoneDemo(name: String, range: ClosedRange<Float>)
         case pressureDemo(name: String, range: ClosedRange<Float>)
+        case pressureCalculation(name: String, range: ClosedRange<Float>)
         case bioluminescenceDemo(name: String, range: ClosedRange<Float>)
     }
 }

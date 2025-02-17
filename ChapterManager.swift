@@ -27,6 +27,7 @@ class ChapterManager: ObservableObject {
     @Published var hasDesignedCreature = false
     
     weak var delegate: ChapterManagerDelegate?
+    weak var oceanView: OceanView?
     
     init() {
         currentChapter = .colorAndLight

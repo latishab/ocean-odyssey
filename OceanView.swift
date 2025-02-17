@@ -37,6 +37,7 @@ class OceanView: UIView {
         var swellFrequency: Float
         var sunAngle: Float
         var colorBallDepth: Float
+        var pressure: Float  
     }
     
     private var timeUniformsBuffer: MTLBuffer!
@@ -65,6 +66,15 @@ class OceanView: UIView {
 
     private var colorBallDepth: Float = 0.0
 
+    // Calculate pressure in atmospheres (atm) based on depth
+    private func calculatePressure(atDepth depth: Float) -> Float {
+        // Pressure increases by 1 atm per 10 meters
+        // depth is normalized (0-1) where 1.0 = 200m for the pressure experiment
+        let depthInMeters = depth * 200.0
+        let pressureAtm = 1.0 + (depthInMeters / 10.0)
+        return pressureAtm
+    }
+    
     override init(frame: CGRect) {
         super.init(frame: frame)
         
@@ -95,12 +105,23 @@ class OceanView: UIView {
         metalLayer.pixelFormat = .bgra8Unorm
         metalLayer.framebufferOnly = true
         
-        // 3. Load the shaders
+        // Load the default library which contains all our .metal files
         guard let library = device.makeDefaultLibrary() else {
-            fatalError("Failed to load Metal library.")
+            fatalError("""
+                Failed to load Metal library. Make sure all .metal files are:
+                1. Included in the target
+                2. Added to the Metal source build phase
+                3. Using proper #include statements
+                """)
         }
-        let vertexFunction = library.makeFunction(name: "waterVertexShader")
-        let fragmentFunction = library.makeFunction(name: "waterFragmentShader")
+        
+        // Get shader functions from the library
+        guard let vertexFunction = library.makeFunction(name: "waterVertexShader"),
+              let fragmentFunction = library.makeFunction(name: "waterFragmentShader"),
+              let boatVertexFunction = library.makeFunction(name: "boatVertexShader"),
+              let boatFragmentFunction = library.makeFunction(name: "boatFragmentShader") else {
+            fatalError("Failed to find shader functions in library")
+        }
         
         // 4. Define the vertex descriptor
         let vertexDescriptor = MTLVertexDescriptor()
@@ -139,11 +160,6 @@ class OceanView: UIView {
         depthStencilState = device.makeDepthStencilState(descriptor: depthStencilDescriptor)
 
         // After creating the water pipeline state, create the boat pipeline state
-        guard let boatVertexFunction = library.makeFunction(name: "boatVertexShader"),
-              let boatFragmentFunction = library.makeFunction(name: "boatFragmentShader") else {
-            fatalError("Failed to load boat shader functions")
-        }
-        
         let boatPipelineDescriptor = MTLRenderPipelineDescriptor()
         boatPipelineDescriptor.vertexFunction = boatVertexFunction
         boatPipelineDescriptor.fragmentFunction = boatFragmentFunction
@@ -178,7 +194,8 @@ class OceanView: UIView {
                 swellHeight: waveHeight,
                 swellFrequency: 0.4,
                 sunAngle: sunAngle,
-                colorBallDepth: 0.0
+                colorBallDepth: 0.0,
+                pressure: 0.0
             )
         }
     }
@@ -270,7 +287,6 @@ class OceanView: UIView {
         
         depthTexture = texture
     }
-
     
     func updateWaterPhysics() {
         time += 0.01
@@ -282,6 +298,9 @@ class OceanView: UIView {
         let heightVariation = sin(swellPhase * 0.05) * 0.02
         let currentSwellHeight = waveHeight + heightVariation
         
+        // Calculate pressure based on depth
+        let pressure = (currentDepth / 10.0) + 1.0
+        
         var timeUniforms = TimeUniforms(
             time: time,
             depth: currentDepth,
@@ -289,7 +308,8 @@ class OceanView: UIView {
             swellHeight: currentSwellHeight,
             swellFrequency: swellFrequency,
             sunAngle: sunAngle,
-            colorBallDepth: colorBallDepth
+            colorBallDepth: colorBallDepth,
+            pressure: pressure  
         )
         
         memcpy(timeUniformsBuffer.contents(), &timeUniforms, MemoryLayout<TimeUniforms>.stride)
@@ -414,9 +434,10 @@ class OceanView: UIView {
         let clampedDepth = max(minDepth, depth)
         colorBallDepth = clampedDepth
         
+        // Calculate and update pressure based on depth
+        let pressure = calculatePressure(atDepth: clampedDepth)
+        
         // Update uniforms
-        if let uniforms = timeUniformsBuffer?.contents().assumingMemoryBound(to: TimeUniforms.self) {
-            uniforms.pointee.colorBallDepth = clampedDepth
-        }
+        updateWaterPhysics()
     }
 }

@@ -87,6 +87,26 @@ struct ChapterView: View {
     }
     
     private func handleExperiment(_ experiment: Experiment, value: Float) {
+        switch experiment.interaction {
+        case .sunlightZoneDemo(_, _):
+            chapterManager.depth = value
+            
+        case .pressureDemo(_, _):
+            chapterManager.depth = value
+            if let oceanView = chapterManager.oceanView {
+                oceanView.setColorBallDepth(value)
+            }
+            
+        case .pressureCalculation(_, _):
+            chapterManager.depth = value
+            if let oceanView = chapterManager.oceanView {
+                oceanView.setColorBallDepth(value)
+            }
+            
+        case .bioluminescenceDemo(_, _):
+            chapterManager.depth = value
+        }
+        
         chapterManager.handleInteraction(
             element: InteractiveElement(title: experiment.title, type: .slider),
             value: value
