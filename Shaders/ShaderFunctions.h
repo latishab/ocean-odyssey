@@ -21,7 +21,7 @@ float cloudDetailNoise(float2 uv, float time);
 float softNoise(float2 uv, float time);
 
 // Color ball effects
-float3 applyPressureDeformation(float3 position, float pressure, float colorBallDepth);
+float3 applyPressureDeformation(float3 position, float2 ballPos, float pressure, float colorBallDepth);
 float3 calculateColorAtDepth(float3 originalColor, float depth);
 float3 drawColorBall(float2 uv, float2 ballPos, float3 backgroundColor, float depth, constant TimeUniforms& uniforms);
 

@@ -139,21 +139,17 @@ fragment float4 waterFragmentShader(VertexOut in [[stage_in]], constant TimeUnif
     
     // Calculate ball position with wave motion near surface
     float2 ballPos = float2(0.5, 0.5);  // Base position at center
-
-    // Add wave motion only when near surface (first 5% of depth)
-    if (depth < 0.05) {
+    
+    // Add wave motion only when near surface
+    if (timeUniforms.depth < 0.05) {
         float waveOffset = combinedWaves(ballPos, time, timeUniforms.swellDirection,
                                        timeUniforms.swellHeight, timeUniforms.swellFrequency);
-        // Reduce wave effect as we go deeper
-        float waveInfluence = 1.0 - (depth / 0.05);  // Goes from 1.0 to 0.0
-        ballPos.y += waveOffset * 0.1 * waveInfluence;  // Scale wave effect
+        float waveInfluence = 1.0 - (timeUniforms.depth / 0.05);
+        ballPos.y += waveOffset * 0.1 * waveInfluence;
     }
 
-    // Apply pressure deformation before drawing
-    float3 deformedPos = applyPressureDeformation(float3(ballPos, 0), timeUniforms.pressure, timeUniforms.colorBallDepth);
-    ballPos = deformedPos.xy;
-    
-    finalColor = drawColorBall(uv, ballPos, finalColor, depth, timeUniforms);
+    // Pass the pressure value to drawColorBall
+    finalColor = drawColorBall(uv, ballPos, finalColor, timeUniforms.depth, timeUniforms);
     
     return float4(finalColor, 1.0);
 }

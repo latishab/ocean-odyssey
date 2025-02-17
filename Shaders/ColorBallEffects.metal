@@ -1,27 +1,26 @@
 #include "ShaderFunctions.h"
 
-float3 applyPressureDeformation(float3 position, float pressure, float colorBallDepth) {
+float3 applyPressureDeformation(float3 position, float2 ballPos, float pressure, float colorBallDepth) {
     // Only apply deformation to vertices near the color ball's depth
     float distanceFromBall = abs(position.y - colorBallDepth);
-    float deformationFactor = exp(-distanceFromBall * 3.0); // Make effect more spread out
+    float deformationFactor = 1.0; // Apply full deformation
     
-    // Calculate compression based on pressure (more visible effect)
-    // At 200m depth, pressure is about 21 atm
-    // Make the ball visibly compress vertically and expand horizontally
-    float verticalCompression = 1.0 - (pressure - 1.0) * 0.05; // Stronger vertical compression
-    verticalCompression = max(verticalCompression, 0.5); // Allow more compression
+    // Much stronger deformation
+    float verticalCompression = 1.0 - (pressure - 1.0) * 0.15; // 3x stronger compression
+    verticalCompression = max(verticalCompression, 0.3); // Allow more extreme compression
     
-    float horizontalExpansion = 1.0 + (pressure - 1.0) * 0.03; // Expand horizontally as it compresses
+    // Expand horizontally more to maintain volume
+    float horizontalExpansion = 1.0 + (pressure - 1.0) * 0.1;
     
     // Apply compression only to the ball
     if (distanceFromBall < 0.1) {
         // Compress vertically (y-axis)
-        position.y = mix(position.y, 
-                        colorBallDepth + (position.y - colorBallDepth) * verticalCompression, 
+        position.y = mix(position.y,
+                        colorBallDepth + (position.y - colorBallDepth) * verticalCompression,
                         deformationFactor);
         
         // Expand horizontally (x-axis) to maintain volume
-        position.x = mix(position.x, 
+        position.x = mix(position.x,
                         ballPos.x + (position.x - ballPos.x) * horizontalExpansion,
                         deformationFactor);
     }
@@ -33,7 +32,6 @@ float3 applyPressureDeformation(float3 position, float pressure, float colorBall
 float3 calculateColorAtDepth(float3 originalColor, float depth) {
     // Scale depth to 200m range for full sunlight zone
     float scaledDepth = depth * 200.0;  // 200m range
-    
     // Even more gradual color absorption rates
     float redLoss = exp(-scaledDepth * 0.02);    // Red disappears ~50m
     float greenLoss = exp(-scaledDepth * 0.01);   // Green persists to ~100m
@@ -45,24 +43,26 @@ float3 calculateColorAtDepth(float3 originalColor, float depth) {
 // NOTE: Colors are fully absorbed by 200m
 float3 drawColorBall(float2 uv, float2 ballPos, float3 backgroundColor, float depth, constant TimeUniforms& uniforms) {
     float pressure = uniforms.pressure;
-    
-    // Calculate compressed ball shape
     float baseRadius = 0.05;
-    float verticalRadius = baseRadius * (1.0 - (pressure - 1.0) * 0.05); // Compress vertically
-    float horizontalRadius = baseRadius * (1.0 + (pressure - 1.0) * 0.03); // Expand horizontally
     
-    // Use elliptical shape for compressed ball
+    // Calculate compression that increases with pressure
+    float compressionFactor = pressure - 1.0;  // 0 at surface, increases with depth
+    
+    // Calculate ellipse axes (a = horizontal radius, b = vertical radius)
+    float a = baseRadius * (1.0 + compressionFactor * 0.1);   // Reduced from 0.3 to 0.1 for subtler horizontal expansion
+    float b = baseRadius / (1.0 + compressionFactor * 5.0);   // Increased from 1.0 to 2.0 for more dramatic vertical compression
+    
+    // Calculate offset from ball center
     float2 offset = uv - ballPos;
-    float horizontalScale = 1.0 / horizontalRadius;
-    float verticalScale = 1.0 / verticalRadius;
-    float distanceSquared = (offset.x * offset.x * horizontalScale * horizontalScale) + 
-                           (offset.y * offset.y * verticalScale * verticalScale);
     
-    if (distanceSquared < 1.0) {
-        // Rest of the existing color ball code...
-        float3 color;
-        float stripe = fract((uv.x - ballPos.x) * 20.0);
+    // Standard ellipse equation: (x/a)² + (y/b)² = 1
+    float ellipseValue = (offset.x * offset.x)/(a * a) + (offset.y * offset.y)/(b * b);
+    
+    if (ellipseValue <= 1.0) {  // Inside the ellipse
+        float stripeWidth = 20.0;
+        float stripe = fract((uv.x - ballPos.x) * stripeWidth);
         
+        float3 color;
         if (stripe < 0.33) {
             color = float3(1.0, 0.2, 0.2);
         } else if (stripe < 0.66) {

@@ -37,7 +37,7 @@ class OceanView: UIView {
         var swellFrequency: Float
         var sunAngle: Float
         var colorBallDepth: Float
-        var pressure: Float  
+        var pressure: Float
     }
     
     private var timeUniformsBuffer: MTLBuffer!
@@ -68,10 +68,9 @@ class OceanView: UIView {
 
     // Calculate pressure in atmospheres (atm) based on depth
     private func calculatePressure(atDepth depth: Float) -> Float {
-        // Pressure increases by 1 atm per 10 meters
-        // depth is normalized (0-1) where 1.0 = 200m for the pressure experiment
-        let depthInMeters = depth * 200.0
-        let pressureAtm = 1.0 + (depthInMeters / 10.0)
+        // Pressure increases with depth (1 atm per 10m)
+        let depthInMeters = depth * 200.0  // Convert to meters (0-200m range)
+        let pressureAtm = 1.0 + (depthInMeters / 10.0)  // 1 atm at surface, +1 atm per 10m
         return pressureAtm
     }
     
@@ -254,7 +253,7 @@ class OceanView: UIView {
             options: .storageModeShared
         )
         timeUniformsBuffer = device.makeBuffer(
-            length: MemoryLayout<TimeUniforms>.stride, 
+            length: MemoryLayout<TimeUniforms>.stride,
             options: .storageModeShared
         )
     }
@@ -309,14 +308,13 @@ class OceanView: UIView {
             swellFrequency: swellFrequency,
             sunAngle: sunAngle,
             colorBallDepth: colorBallDepth,
-            pressure: pressure  
+            pressure: pressure
         )
         
         memcpy(timeUniformsBuffer.contents(), &timeUniforms, MemoryLayout<TimeUniforms>.stride)
     }
     
     override func draw(_ rect: CGRect) {
-        print("OceanView: Drawing frame with depth: \(currentDepth)")
         guard let drawable = metalLayer.nextDrawable(),
               let depthTexture = depthTexture else {
             print("Drawable or depth texture is unavailable.")
@@ -434,10 +432,16 @@ class OceanView: UIView {
         let clampedDepth = max(minDepth, depth)
         colorBallDepth = clampedDepth
         
-        // Calculate and update pressure based on depth
+        // Calculate pressure with more dramatic effect
         let pressure = calculatePressure(atDepth: clampedDepth)
         
-        // Update uniforms
-        updateWaterPhysics()
+        // Update the uniforms with the new pressure value
+        if let uniforms = timeUniformsBuffer?.contents().assumingMemoryBound(to: TimeUniforms.self) {
+            uniforms.pointee.colorBallDepth = colorBallDepth
+            uniforms.pointee.pressure = pressure
+        }
+        
+        // Trigger a redraw
+        setNeedsDisplay()
     }
 }
