@@ -13,166 +13,64 @@ struct ExperimentView: View {
     @State private var feedbackMessage: String = ""
     @State private var isCorrect: Bool = false
     @FocusState private var isTextFieldFocused: Bool
-    @State private var cursorPosition: Int = 0
+    
+    private var formattedPressureDepth: String {
+        String(format: "%.0fm", chapterManager.currentPressureDepth)
+    }
     
     var body: some View {
         ZStack(alignment: .bottom) {
             VStack(alignment: .leading, spacing: 10) {
-                // Title with mission-style formatting
-                HStack {
-                    Image(systemName: "circle.fill")
-                        .foregroundColor(.blue)
-                        .font(.system(size: 8))
-                    Text(experiment.title)
-                        .font(.headline)
-                        .foregroundColor(.white)
-                }
+                // Header
+                ExperimentHeader(title: experiment.title, description: experiment.description)
                 
-                Text(experiment.description)
-                    .font(.body)
-                    .foregroundColor(.white.opacity(0.8))
-                
-                // Interactive elements based on experiment type
+                // Interactive content
                 switch experiment.interaction {
-                case .sunlightZoneDemo(let name, _):
-                    // Color absorption experiment (0-200m)
-                    VStack {
-                        HStack {
-                            Text(name)
-                                .foregroundColor(.white)
-                            Slider(value: $sliderValue, in: 0...1)
-                                .onChange(of: sliderValue) { newValue in
-                                    // IMPORTANT: We normalize the depth here (0-1)
-                                    // This normalized value flows through the entire system
-                                    // Do not normalize again in ChapterManager
-                                    let actualDepth = newValue * 200  // For display only
-                                    depthText = String(format: "%.1fm", actualDepth)
-                                    onValueChanged(newValue)  // Pass normalized value
-                                }
-                            Text(depthText)
-                                .foregroundColor(.white)
-                                .frame(width: 60, alignment: .trailing)
-                        }
-                    }
+                case .colorChangeDemo(let name, _):
+                    ColorExperimentView(
+                        name: name,
+                        sliderValue: $sliderValue,
+                        depthText: $depthText,
+                        onValueChanged: onValueChanged
+                    )
                     
-                case .pressureDemo(let name, let range):
-                    // Learning experiment - just show the pressure change
-                    VStack(spacing: 15) {
-                        // Pressure gauge visualization
-                        PressureGaugeView(
-                            depth: Float(depthText.replacingOccurrences(of: "m", with: "")) ?? 0,
-                            maxDepth: range.upperBound
-                        )
-                        
-                        // Depth control
-                        HStack {
-                            Text(name)
-                                .foregroundColor(.white)
-                            Slider(value: $sliderValue, in: 0...1)
-                                .onChange(of: sliderValue) { newValue in
-                                    let actualDepth = range.lowerBound + (newValue * (range.upperBound - range.lowerBound))
-                                    depthText = String(format: "%.0fm", actualDepth)
-                                    onValueChanged(newValue)
-                                }
-                            Text(depthText)
-                                .foregroundColor(.white)
-                                .frame(width: 60, alignment: .trailing)
+                case .pressureDemo(let name, _):
+                    PressureExperimentView(
+                        name: name,
+                        sliderValue: $sliderValue,
+                        depthText: $depthText,
+                        onValueChanged: { value in
+                            chapterManager.currentPressureDepth = value * 200
+                            onValueChanged(value)
                         }
-                    }
-                    .padding()
+                    )
                     
-                case .pressureCalculation(let name, let range):
-                    // The existing pressure calculation quiz code
-                    VStack(alignment: .leading, spacing: 10) {
-                        Text("Calculate the pressure at this depth:")
-                            .foregroundColor(.white)
-                        
-                        HStack {
-                            TextField("Enter pressure", text: $pressureAnswer)
-                                .keyboardType(.decimalPad)
-                                .textFieldStyle(.roundedBorder)
-                                .frame(width: 200)
-                                .focused($isTextFieldFocused)
-                                .toolbar {
-                                    ToolbarItemGroup(placement: .keyboard) {
-                                        ScrollView(.horizontal, showsIndicators: false) {
-                                            HStack(spacing: 12) {
-                                                ForEach(["depth/10 + 1", "depth × 0.1 + 1", "(depth + 10)/10"], id: \.self) { formula in
-                                                    Button(action: {
-                                                        if let depth = Float(depthText.replacingOccurrences(of: "m", with: "")),
-                                                           let result = evaluateFormula(formula, depth: depth) {
-                                                            pressureAnswer = String(format: "%.1f", result)
-                                                        }
-                                                    }) {
-                                                        Text(formula)
-                                                            .font(.system(.body, design: .monospaced))
-                                                            .foregroundColor(.white)
-                                                            .padding(.horizontal, 12)
-                                                            .padding(.vertical, 8)
-                                                            .background(Color(white: 0.2))
-                                                            .cornerRadius(8)
-                                                    }
-                                                }
-                                            }
-                                        }
-                                        
-                                        Spacer()
-                                        
-                                        Button("Done") {
-                                            isTextFieldFocused = false
-                                        }
-                                    }
-                                }
-                            
-                            Text("ATM")
-                                .foregroundColor(.white)
-                            
-                            Button("Check") {
-                                checkPressureCalculation()
-                            }
-                            .buttonStyle(.bordered)
-                            .tint(.blue)
-                        }
-                    }
-                    
-                    // Feedback message
-                    if !feedbackMessage.isEmpty {
-                        Text(feedbackMessage)
-                            .foregroundColor(isCorrect ? .green : .orange)
-                            .font(.callout)
-                    }
-                case .bioluminescenceDemo(let name, _):
-                    // Bioluminescence experiment (1000-4000m)
-                    VStack {
-                        HStack {
-                            Text(name)
-                                .foregroundColor(.white)
-                            Slider(value: $sliderValue, in: 0...1)
-                                .onChange(of: sliderValue) { newValue in
-                                    let actualDepth = 1000 + (newValue * 3000) // 1000-4000m range
-                                    depthText = String(format: "%.0fm", actualDepth)
-                                    onValueChanged(newValue)
-                                }
-                            Text(depthText)
-                                .foregroundColor(.white)
-                                .frame(width: 60, alignment: .trailing)
-                        }
-                    }
+                case .pressureCalculation(let name, _):
+                    PressureCalculationView(
+                        name: name,
+                        pressureAnswer: $pressureAnswer,
+                        depthText: .constant(formattedPressureDepth),  
+                        feedbackMessage: $feedbackMessage,
+                        isCorrect: $isCorrect,
+                        isTextFieldFocused: _isTextFieldFocused,
+                        checkPressure: checkPressureCalculation,
+                        evaluateFormula: evaluateFormula
+                    )
                 }
             }
             .padding()
+            .background(Color.black.opacity(0.3))
+            .cornerRadius(10)
+            .overlay(
+                RoundedRectangle(cornerRadius: 10)
+                    .stroke(Color.blue.opacity(0.3), lineWidth: 1)
+            )
         }
-        .background(Color.black.opacity(0.3))
-        .cornerRadius(10)
-        .overlay(
-            RoundedRectangle(cornerRadius: 10)
-                .stroke(Color.blue.opacity(0.3), lineWidth: 1)
-        )
     }
     
     private func checkPressureCalculation() {
-        guard let depth = Float(depthText.replacingOccurrences(of: "m", with: "")),
-              let answer = Float(pressureAnswer) else {
+        let depth = chapterManager.currentPressureDepth
+        guard let answer = Float(pressureAnswer) else {
             feedbackMessage = "Please enter a valid number"
             return
         }
@@ -190,17 +88,205 @@ struct ExperimentView: View {
     }
     
     private func evaluateFormula(_ formula: String, depth: Float) -> Float? {
-        // Replace the text formula with actual calculation
         switch formula {
-        case "depth/10 + 1":
+        case "depth/10 + 1":    // Correct: Converts to ATM and adds surface pressure
             return depth/10 + 1
-        case "depth × 0.1 + 1":
-            return depth * 0.1 + 1
-        case "(depth + 10)/10":
-            return (depth + 10)/10
+        case "depth/10":        // Wrong: Forgets to add surface pressure
+            return depth/10
+        case "(depth + 1)/10":  // Wrong: Adds 1 before dividing
+            return (depth + 1)/10
         default:
             return nil
         }
+    }
+}
+
+// MARK: - Subviews
+private struct ExperimentHeader: View {
+    let title: String
+    let description: String
+    
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack {
+                Image(systemName: "circle.fill")
+                    .foregroundColor(.blue)
+                    .font(.system(size: 8))
+                Text(title)
+                    .font(.headline)
+                    .foregroundColor(.white)
+            }
+            
+            Text(description)
+                .font(.body)
+                .foregroundColor(.white.opacity(0.8))
+        }
+    }
+}
+
+private struct ColorExperimentView: View {
+    let name: String
+    @Binding var sliderValue: Float
+    @Binding var depthText: String
+    let onValueChanged: (Float) -> Void
+    
+    var body: some View {
+        VStack {
+            HStack {
+                Text(name)
+                    .foregroundColor(.white)
+                Slider(value: $sliderValue, in: 0...1)
+                    .onChange(of: sliderValue) { newValue in
+                        let actualDepth = newValue * 200
+                        depthText = String(format: "%.1fm", actualDepth)
+                        onValueChanged(newValue)
+                    }
+                Text(depthText)
+                    .foregroundColor(.white)
+                    .frame(width: 60, alignment: .trailing)
+            }
+        }
+    }
+}
+
+private struct PressureExperimentView: View {
+    let name: String
+    @Binding var sliderValue: Float
+    @Binding var depthText: String
+    let onValueChanged: (Float) -> Void
+    
+    var body: some View {
+        VStack(spacing: 15) {
+            let parsedDepth = Float(depthText.replacingOccurrences(of: "m", with: "")) ?? 0
+            PressureGaugeView(depth: parsedDepth, maxDepth: 200)
+            
+            HStack {
+                Text(name)
+                    .foregroundColor(.white)
+                Slider(value: $sliderValue, in: 0...1)
+                    .onChange(of: sliderValue) { newValue in
+                        let actualDepth = newValue * 200
+                        depthText = String(format: "%.0fm", actualDepth)
+                        onValueChanged(newValue)
+                    }
+                Text(depthText)
+                    .foregroundColor(.white)
+                    .frame(width: 60, alignment: .trailing)
+            }
+        }
+        .padding()
+    }
+}
+
+private struct PressureCalculationView: View {
+    let name: String
+    @Binding var pressureAnswer: String
+    @Binding var depthText: String
+    @Binding var feedbackMessage: String
+    @Binding var isCorrect: Bool
+    @FocusState var isTextFieldFocused: Bool
+    let checkPressure: () -> Void
+    let evaluateFormula: (String, Float) -> Float?
+    
+    var body: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            // Current depth indicator
+            HStack {
+                Image(systemName: "arrow.down.circle.fill")
+                    .foregroundColor(.blue)
+                Text("Current depth: \(depthText)")
+                    .font(.title2)
+                    .fontWeight(.bold)
+                    .foregroundColor(.white)
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding()
+            .background(Color.blue.opacity(0.1))
+            .cornerRadius(8)
+            
+            // Instructions
+            VStack(alignment: .leading, spacing: 8) {
+                Text("Calculate the water pressure at this depth")
+                    .font(.headline)
+                    .foregroundColor(.white)
+                
+                Text("Remember:")
+                    .font(.subheadline)
+                    .foregroundColor(.white.opacity(0.8))
+                
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("• Start with 1 ATM (surface pressure)")
+                    Text("• Add 1 ATM for every 10m of depth")
+                }
+                .font(.subheadline)
+                .foregroundColor(.white.opacity(0.7))
+                .padding(.leading, 4)
+            }
+            
+            // Formula reference (collapsible)
+            DisclosureGroup {
+                Text("Pressure = (depth ÷ 10) + 1 ATM")
+                    .font(.system(.body, design: .monospaced))
+                    .foregroundColor(.blue.opacity(0.8))
+                    .padding(.vertical, 8)
+            } label: {
+                Text("Show formula")
+                    .foregroundColor(.blue)
+            }
+            .padding()
+            .background(Color.blue.opacity(0.1))
+            .cornerRadius(8)
+            
+            // Input section
+            VStack(alignment: .leading, spacing: 8) {
+                Text("Your answer:")
+                    .font(.subheadline)
+                    .foregroundColor(.white.opacity(0.8))
+                
+                HStack(spacing: 12) {
+                    TextField("Enter pressure", text: $pressureAnswer)
+                        .keyboardType(.decimalPad)
+                        .textFieldStyle(.roundedBorder)
+                        .frame(maxWidth: .infinity)
+                        .focused($isTextFieldFocused)
+                        .toolbar {
+                            ToolbarItemGroup(placement: .keyboard) {
+                                FormulaKeyboardView(
+                                    depthText: depthText,
+                                    pressureAnswer: $pressureAnswer,
+                                    evaluateFormula: evaluateFormula
+                                )
+                            }
+                        }
+                    
+                    Text("ATM")
+                        .foregroundColor(.white)
+                        .font(.headline)
+                    
+                    Button("Check") {
+                        checkPressure()
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .tint(.blue)
+                }
+            }
+            .padding(.top, 8)
+            
+            // Feedback message
+            if !feedbackMessage.isEmpty {
+                Text(feedbackMessage)
+                    .foregroundColor(isCorrect ? .green : .orange)
+                    .font(.callout)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding()
+                    .background(Color(isCorrect ? .green : .orange).opacity(0.1))
+                    .cornerRadius(8)
+            }
+        }
+        .padding()
+        .frame(maxWidth: .infinity)
+        .background(Color.black.opacity(0.2))
+        .cornerRadius(12)
     }
 }
 
@@ -221,6 +307,7 @@ struct FormulaButton: View {
     }
 }
 
+// MARK: - Pressure Formulas
 enum PressureFormula {
     case basic      // "Depth ÷ 10 + 1"
     case decimal    // "(Depth × 0.1) + 1"
@@ -268,4 +355,47 @@ struct KeyboardToolbar: UIViewRepresentable {
     }
     
     func updateUIView(_ uiView: UIView, context: Context) {}
+}
+
+// MARK: - Formula Keyboard View
+private struct FormulaKeyboardView: View {
+    let depthText: String
+    @Binding var pressureAnswer: String
+    let evaluateFormula: (String, Float) -> Float?
+    
+    var body: some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 12) {
+                ForEach([
+                    "depth/10 + 1",      // Correct formula
+                    "depth/10",          // Wrong: Forgets to add surface pressure
+                    "(depth + 1)/10",    // Wrong: Adds 1 before dividing
+                ], id: \.self) { formula in
+                    Button(action: {
+                        if let depth = Float(depthText.replacingOccurrences(of: "m", with: "")),
+                           let result = evaluateFormula(formula, depth) {
+                            pressureAnswer = String(format: "%.1f", result)
+                        }
+                    }) {
+                        Text(formula)
+                            .font(.system(.body, design: .monospaced))
+                            .foregroundColor(.white)
+                            .padding(.horizontal, 12)
+                            .padding(.vertical, 8)
+                            .background(Color(white: 0.2))
+                            .cornerRadius(8)
+                    }
+                }
+            }
+        }
+        
+        Spacer()
+        
+        Button("Done") {
+            UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder),
+                                         to: nil,
+                                         from: nil,
+                                         for: nil)
+        }
+    }
 }

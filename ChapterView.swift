@@ -30,8 +30,8 @@ struct ChapterView: View {
                             .foregroundColor(.white.opacity(0.8))
                             .padding(.vertical)
                         
-                        // Current experiment
-                        if let experiment = currentChapter.experiments.first {
+                        // Current experiments
+                        ForEach(currentChapter.experiments, id: \.title) { experiment in
                             ExperimentView(
                                 experiment: experiment,
                                 onValueChanged: { value in
@@ -39,6 +39,7 @@ struct ChapterView: View {
                                 },
                                 chapterManager: chapterManager
                             )
+                            .padding(.bottom, 20)  // Add some spacing between experiments
                         }
                         
                         // Progress indicators
@@ -70,55 +71,50 @@ struct ChapterView: View {
         case .colorAndLight:
             targetDepth = 0.0  // Start at surface
         case .pressureAndLife:
-            if currentChapter == .colorAndLight && depth >= (190.0/200.0) {
+            if currentChapter == .colorAndLight && depth >= 0.9 {
                 targetDepth = depth  // Keep current depth
             } else {
-                targetDepth = 200.0 / 4000.0  // Otherwise start at 200m
+                targetDepth = 0.0
             }
-        case .deepSeaAdaptations:
-            if currentChapter == .pressureAndLife && depth >= (3900.0/4000.0) {
-                targetDepth = depth  // Keep current depth
-            } else {
-                targetDepth = 1000.0 / 4000.0  // Otherwise start at 200m
-            }
-            targetDepth = 1000.0 / 4000.0  // Start at 1000m
         }
         depth = targetDepth
     }
     
     private func handleExperiment(_ experiment: Experiment, value: Float) {
         switch experiment.interaction {
-        case .sunlightZoneDemo(_, _):
-            chapterManager.depth = value
+        case .colorChangeDemo(_, _):
+            chapterManager.handleInteraction(
+                element: InteractiveElement(title: experiment.title, type: .colorBallDemo),
+                value: value
+            )
             
         case .pressureDemo(_, _):
-            chapterManager.depth = value
+            chapterManager.handleInteraction(
+                element: InteractiveElement(title: experiment.title, type: .slider),
+                value: value
+            )
             if let oceanView = chapterManager.oceanView {
                 oceanView.setColorBallDepth(value)
             }
             
         case .pressureCalculation(_, _):
-            chapterManager.depth = value
+            chapterManager.handleInteraction(
+                element: InteractiveElement(title: experiment.title, type: .slider),
+                value: value
+            )
             if let oceanView = chapterManager.oceanView {
                 oceanView.setColorBallDepth(value)
             }
-            
-        case .bioluminescenceDemo(_, _):
-            chapterManager.depth = value
         }
         
-        chapterManager.handleInteraction(
-            element: InteractiveElement(title: experiment.title, type: .slider),
-            value: value
-        )
+        // Update depth for all experiment types
+        chapterManager.depth = value
     }
 }
 
-// Helper Views
+// MARK: - Helper Views
 struct ChapterNavigationView: View {
     @Binding var currentChapter: Chapter
-    // Note: onChapterChange is kept for future use but not called during chapter navigation
-    // to prevent double depth updates with setChapter
     let onChapterChange: (Chapter) -> Void
     @ObservedObject var chapterManager: ChapterManager
     
@@ -157,8 +153,8 @@ struct ChapterNavigationView: View {
                 Image(systemName: "chevron.right.circle.fill")
                     .font(.title)
             }
-            .disabled(currentChapter == .deepSeaAdaptations)
-            .opacity(currentChapter == .deepSeaAdaptations ? 0.3 : 1)
+            .disabled(currentChapter == .pressureAndLife)
+            .opacity(currentChapter == .pressureAndLife ? 0.3 : 1)
         }
         .foregroundColor(.white)
     }

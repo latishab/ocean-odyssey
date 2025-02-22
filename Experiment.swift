@@ -12,9 +12,9 @@ struct Experiment {
     var isCompleted: Bool = false
     
     enum Interaction {
-        case sunlightZoneDemo(name: String, range: ClosedRange<Float>)
+        case colorChangeDemo(name: String, range: ClosedRange<Float>)
         case pressureDemo(name: String, range: ClosedRange<Float>)
         case pressureCalculation(name: String, range: ClosedRange<Float>)
-        case bioluminescenceDemo(name: String, range: ClosedRange<Float>)
     }
 }
+

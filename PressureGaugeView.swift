@@ -5,7 +5,10 @@ struct PressureGaugeView: View {
     let maxDepth: Float
     
     private var pressure: Float {
-        (depth / 10.0) + 1.0
+        // Calculate pressure: 1 ATM at surface + 1 ATM per 10m
+        let waterPressure = depth / 10.0  // Every 10m adds 1 ATM
+        let totalPressure = waterPressure + 1.0  // Add 1 ATM surface pressure
+        return totalPressure
     }
     
     var body: some View {
@@ -19,7 +22,7 @@ struct PressureGaugeView: View {
                 
                 // Pressure indicator
                 Circle()
-                    .trim(from: 0, to: CGFloat(min(pressure / (maxDepth/10 + 1), 1.0)))
+                    .trim(from: 0, to: CGFloat(min(pressure / 21.0, 1.0)))  // 21 ATM at 200m
                     .stroke(
                         LinearGradient(
                             gradient: Gradient(colors: [.blue, .red]),
@@ -33,7 +36,7 @@ struct PressureGaugeView: View {
                 
                 // Center display
                 VStack {
-                    Text("\(Int(pressure * 10)/10, specifier: "%.1f")")
+                    Text("\(pressure, specifier: "%.1f")")  // Changed to use direct pressure value
                         .font(.system(size: 36, weight: .bold, design: .rounded))
                         .foregroundColor(.white)
                     Text("ATM")
@@ -77,13 +80,3 @@ struct PressureGaugeView: View {
         .cornerRadius(16)
     }
 }
-
-// Preview provider for SwiftUI canvas
-struct PressureGaugeView_Previews: PreviewProvider {
-    static var previews: some View {
-        ZStack {
-            Color.black
-            PressureGaugeView(depth: 30, maxDepth: 50)
-        }
-    }
-} 

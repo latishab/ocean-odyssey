@@ -46,19 +46,39 @@ float3 drawColorBall(float2 uv, float2 ballPos, float3 backgroundColor, float de
     float baseRadius = 0.05;
     
     // Calculate compression that increases with pressure
-    float compressionFactor = pressure - 1.0;  // 0 at surface, increases with depth
+    float compressionFactor = pressure - 1.0;  // Will be 0 at surface (pressure = 1)
     
-    // Calculate ellipse axes (a = horizontal radius, b = vertical radius)
-    float a = baseRadius * (1.0 + compressionFactor * 0.1);   // Reduced from 0.3 to 0.1 for subtler horizontal expansion
-    float b = baseRadius / (1.0 + compressionFactor * 5.0);   // Increased from 1.0 to 2.0 for more dramatic vertical compression
+    // At surface: a = b = baseRadius
+    float a = baseRadius * (1.0 + compressionFactor * 0.2);
+    float b = baseRadius / (1.0 + compressionFactor * 4.0);
     
     // Calculate offset from ball center
     float2 offset = uv - ballPos;
     
-    // Standard ellipse equation: (x/a)² + (y/b)² = 1
-    float ellipseValue = (offset.x * offset.x)/(a * a) + (offset.y * offset.y)/(b * b);
+    // Calculate pinch based on vertical position
+    float yFactor = abs(offset.y/b);  // 0 at middle, 1 at top/bottom
+    float pinchAmount = compressionFactor * 0.8;  // Adjusted for better pinch control
     
-    if (ellipseValue <= 1.0) {  // Inside the ellipse
+    // Create apple-core shape: narrow in middle, wider at top/bottom
+    float xScale = 1.0 - pinchAmount * (1.0 - pow(yFactor, 2.0));  // Inverted the formula
+    xScale = max(xScale, 0.2);  // Prevent excessive pinching
+    
+    // Apply the pinched scaling
+    float2 normalizedOffset = float2(
+        offset.x / (a * xScale),  // X gets pinched inward at middle
+        offset.y / b              // Y just gets compressed
+    );
+    
+    // Keep basic circle/ellipse shape
+    float horizontalExp = 2.0;
+    float verticalExp = 2.0;
+    
+    float horizontalTerm = pow(abs(normalizedOffset.x), horizontalExp);
+    float verticalTerm = pow(abs(normalizedOffset.y), verticalExp);
+    
+    float finalShape = horizontalTerm + verticalTerm;
+    
+    if (finalShape <= 1.0) {
         float stripeWidth = 20.0;
         float stripe = fract((uv.x - ballPos.x) * stripeWidth);
         
