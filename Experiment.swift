@@ -15,6 +15,14 @@ struct Experiment {
         case colorChangeDemo(name: String, range: ClosedRange<Float>)
         case pressureDemo(name: String, range: ClosedRange<Float>)
         case pressureCalculation(name: String, range: ClosedRange<Float>)
+        case quiz(name: String, questions: [QuizQuestion])
     }
+}
+
+struct QuizQuestion {
+    let question: String
+    let options: [String]
+    let correctAnswer: Int
+    let explanation: String
 }
 

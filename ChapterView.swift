@@ -39,7 +39,7 @@ struct ChapterView: View {
                                 },
                                 chapterManager: chapterManager
                             )
-                            .padding(.bottom, 20)  // Add some spacing between experiments
+                            .padding(.bottom, 20)  
                         }
                         
                         // Progress indicators
@@ -76,6 +76,8 @@ struct ChapterView: View {
             } else {
                 targetDepth = 0.0
             }
+        case .finalQuiz:
+            targetDepth = 0.0  // Quiz doesn't need depth interaction
         }
         depth = targetDepth
     }
@@ -105,10 +107,18 @@ struct ChapterView: View {
             if let oceanView = chapterManager.oceanView {
                 oceanView.setColorBallDepth(value)
             }
+            
+        case .quiz(_, _):
+            // Quiz doesn't need depth handling
+            break
         }
         
-        // Update depth for all experiment types
-        chapterManager.depth = value
+        // Update depth for all experiment types except quiz
+        if case .quiz = experiment.interaction {
+            // NOTHING HERE
+        } else {
+            chapterManager.depth = value
+        }
     }
 }
 
@@ -153,8 +163,8 @@ struct ChapterNavigationView: View {
                 Image(systemName: "chevron.right.circle.fill")
                     .font(.title)
             }
-            .disabled(currentChapter == .pressureAndLife)
-            .opacity(currentChapter == .pressureAndLife ? 0.3 : 1)
+            .disabled(currentChapter == .finalQuiz)
+            .opacity(currentChapter == .finalQuiz ? 0.3 : 1)
         }
         .foregroundColor(.white)
     }
@@ -167,10 +177,12 @@ struct DiscoveryView: View {
         HStack {
             Image(systemName: "star.fill")
                 .foregroundColor(.yellow)
-            Text(message)
+            Text(message) 
                 .foregroundColor(.white)
+                .frame(maxWidth: .infinity, alignment: .leading)
         }
         .padding()
+        .frame(maxWidth: .infinity)
         .background(Color.blue.opacity(0.2))
         .cornerRadius(8)
     }

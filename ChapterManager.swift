@@ -25,6 +25,10 @@ class ChapterManager: ObservableObject {
     @Published var hasCompletedColorExperiment = false
     @Published var hasCompletedPressureExperiment = false
     
+    // Add quiz discoveries tracking
+    private var quizDiscoveries: Set<String> = []
+    @Published var hasCompletedQuiz = false
+    
     weak var delegate: ChapterManagerDelegate?
     weak var oceanView: OceanView?
     
@@ -38,6 +42,8 @@ class ChapterManager: ObservableObject {
             handleSliderInteraction(element: element, value: value)
         case .colorBallDemo:
             handleColorBallInteraction(element: element, value: value)
+        case .quiz:
+            handleQuizInteraction(element: element, value: value)
         default:
             break
         }
@@ -60,6 +66,8 @@ class ChapterManager: ObservableObject {
             discoveries = colorDiscoveries
         case .pressureAndLife:
             discoveries = pressureDiscoveries
+        case .finalQuiz:
+            discoveries = quizDiscoveries
         }
     }
     
@@ -95,6 +103,8 @@ class ChapterManager: ObservableObject {
             handleColorBallInteraction(element: element, value: value)
         case .pressureAndLife:
             handlePressureExperiment(value)
+        case .finalQuiz:
+            break  
         }
     }
     
@@ -136,13 +146,42 @@ class ChapterManager: ObservableObject {
     }
     
     private func updateMissionProgress() {
-        let totalMilestones = 2.0  
+        let totalMilestones = 3.0  // Updated to include quiz
         var completedMilestones = 0.0
         
         if !discoveries.isEmpty { completedMilestones += 1 }
         if hasCompletedColorExperiment { completedMilestones += 0.5 }
         if hasCompletedPressureExperiment { completedMilestones += 0.5 }
+        if hasCompletedQuiz { completedMilestones += 1 }
         
         missionProgress = Float(completedMilestones / totalMilestones)
+    }
+    
+    private func handleQuizInteraction(element: InteractiveElement, value: Float) {
+        let percentage = value
+        let achievement = if percentage >= 0.8 {
+            "🏆 Ocean Science Master: Excellent understanding of ocean phenomena!"
+        } else if percentage >= 0.6 {
+            "🌊 Ocean Explorer: Good grasp of ocean science fundamentals"
+        } else {
+            "🔍 Ocean Apprentice: Keep exploring to deepen your understanding"
+        }
+        
+        quizDiscoveries.insert(achievement)
+        discoveries = quizDiscoveries
+        hasCompletedQuiz = true
+        
+        updateMissionProgress()
+    }
+}
+
+struct InteractiveElement {
+    let title: String
+    let type: InteractionType
+    
+    enum InteractionType {
+        case slider
+        case colorBallDemo
+        case quiz
     }
 }

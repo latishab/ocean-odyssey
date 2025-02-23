@@ -56,6 +56,9 @@ struct ExperimentView: View {
                         checkPressure: checkPressureCalculation,
                         evaluateFormula: evaluateFormula
                     )
+                    
+                case .quiz(_, let questions):
+                    QuizView(questions: questions, chapterManager: chapterManager)
                 }
             }
             .padding()
@@ -396,6 +399,176 @@ private struct FormulaKeyboardView: View {
                                          to: nil,
                                          from: nil,
                                          for: nil)
+        }
+    }
+}
+
+private struct QuizView: View {
+    let questions: [QuizQuestion]
+    @ObservedObject var chapterManager: ChapterManager
+    @State private var currentQuestionIndex = 0
+    @State private var selectedAnswer: Int? = nil
+    @State private var showExplanation = false
+    @State private var correctAnswers = 0
+    @State private var hasCompletedQuiz = false
+    
+    var body: some View {
+        VStack(alignment: .leading, spacing: 20) {
+            // Progress indicator
+            HStack {
+                Text("Question \(currentQuestionIndex + 1) of \(questions.count)")
+                    .foregroundColor(.white.opacity(0.8))
+                Spacer()
+                Text("Score: \(correctAnswers)/\(questions.count)")
+                    .foregroundColor(.white)
+            }
+            .padding(.bottom, 8)
+            
+            // Question
+            Text(questions[currentQuestionIndex].question)
+                .font(.title3)
+                .fontWeight(.bold)
+                .foregroundColor(.white)
+            
+            // Options
+            VStack(spacing: 12) {
+                ForEach(0..<questions[currentQuestionIndex].options.count, id: \.self) { index in
+                    Button(action: {
+                        if !showExplanation {
+                            selectedAnswer = index
+                            showExplanation = true
+                            if index == questions[currentQuestionIndex].correctAnswer {
+                                correctAnswers += 1
+                            }
+                        }
+                    }) {
+                        HStack {
+                            Text(questions[currentQuestionIndex].options[index])
+                                .foregroundColor(.white)
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                            if showExplanation {
+                                if index == questions[currentQuestionIndex].correctAnswer {
+                                    Image(systemName: "checkmark.circle.fill")
+                                        .foregroundColor(.green)
+                                } else if index == selectedAnswer {
+                                    Image(systemName: "x.circle.fill")
+                                        .foregroundColor(.red)
+                                }
+                            }
+                        }
+                        .padding()
+                        .frame(maxWidth: .infinity)
+                        .background(
+                            RoundedRectangle(cornerRadius: 10)
+                                .fill(buttonBackgroundColor(for: index))
+                        )
+                    }
+                    .buttonStyle(.plain)
+                    .disabled(showExplanation)
+                }
+            }
+            .frame(maxWidth: .infinity)
+            
+            // Explanation
+            if showExplanation {
+                VStack(alignment: .leading, spacing: 8) {
+                    Text(selectedAnswer == questions[currentQuestionIndex].correctAnswer ? "Correct!" : "Not quite...")
+                        .font(.headline)
+                        .foregroundColor(selectedAnswer == questions[currentQuestionIndex].correctAnswer ? .green : .orange)
+                    
+                    Text(questions[currentQuestionIndex].explanation)
+                        .foregroundColor(.white.opacity(0.9))
+                }
+                .frame(maxWidth: .infinity)
+                .padding()
+                .background(Color.black.opacity(0.3))
+                .cornerRadius(10)
+                
+                Button(currentQuestionIndex < questions.count - 1 ? "Next Question" : "Finish Quiz") {
+                    if currentQuestionIndex < questions.count - 1 {
+                        currentQuestionIndex += 1
+                        selectedAnswer = nil
+                        showExplanation = false
+                    } else {
+                        hasCompletedQuiz = true
+                    }
+                }
+                .buttonStyle(.borderedProminent)
+                .tint(.blue)
+                .padding(.top)
+            }
+            
+            if hasCompletedQuiz {
+                QuizSummaryView(score: correctAnswers, total: questions.count)
+                    .onAppear {
+                        // Report quiz completion to ChapterManager
+                        let percentage = Float(correctAnswers) / Float(questions.count)
+                        chapterManager.handleInteraction(
+                            element: InteractiveElement(
+                                title: "Ocean Knowledge Quiz",
+                                type: .quiz
+                            ),
+                            value: percentage
+                        )
+                    }
+            }
+        }
+        .padding()
+        .background(Color.black.opacity(0.2))
+        .cornerRadius(12)
+    }
+    
+    private func buttonBackgroundColor(for index: Int) -> Color {
+        if !showExplanation {
+            return Color.blue.opacity(0.3)
+        }
+        
+        if index == questions[currentQuestionIndex].correctAnswer {
+            return Color.green.opacity(0.3)
+        }
+        if index == selectedAnswer {
+            return Color.red.opacity(0.3)
+        }
+        return Color.blue.opacity(0.2)
+    }
+}
+
+private struct QuizSummaryView: View {
+    let score: Int
+    let total: Int
+    
+    var body: some View {
+        VStack(spacing: 16) {
+            Text("Quiz Complete!")
+                .font(.title2)
+                .fontWeight(.bold)
+                .foregroundColor(.white)
+            
+            Text("You scored \(score) out of \(total)")
+                .font(.title3)
+                .foregroundColor(.white)
+            
+            Text(feedbackMessage)
+                .foregroundColor(.white.opacity(0.9))
+                .multilineTextAlignment(.center)
+        }
+        .padding()
+        .frame(maxWidth: .infinity)
+        .background(Color.blue.opacity(0.2))
+        .cornerRadius(12)
+    }
+    
+    private var feedbackMessage: String {
+        let percentage = Double(score) / Double(total)
+        switch percentage {
+        case 0.8...1.0:
+            return "Excellent! You've mastered the concepts!"
+        case 0.6..<0.8:
+            return "Good job! You understand most of the material."
+        case 0.4..<0.6:
+            return "Keep practicing! You're getting there."
+        default:
+            return "Review the chapters again and try the quiz later."
         }
     }
 }
