@@ -1,7 +1,7 @@
 #include "ShaderTypes.metal"
 #include "ShaderFunctions.h"
 
-// Implementation of random2 (used by all other files)
+// Generate random 2D noise
 float2 random2(float2 p) {
     return fract(sin(float2(dot(p,float2(127.1,311.7)),
                            dot(p,float2(269.5,183.3))))*43758.5453);
@@ -10,23 +10,16 @@ float2 random2(float2 p) {
 //------------------------------------------------------------------------------
 // Shader Entry Points
 //------------------------------------------------------------------------------
-// Vertex Shader: Processes vertex positions and calculates UV coordinates
+// Process vertex positions and calculate UV coordinates
 vertex VertexOut waterVertexShader(VertexIn in [[stage_in]], constant TimeUniforms& timeUniforms [[buffer(1)]]) {
     VertexOut out;
-    
-    // Pass through the position
     out.position = float4(in.position.xy, 0.0, 1.0);
-    
-    // Calculate UV coordinates (will range from 0 to 1)
-    out.uv = float2(
-        (in.position.x + 1.0) * 0.5,  // Convert from [-1,1] to [0,1]
-        (in.position.y + 1.0) * 0.5   // Convert from [-1,1] to [0,1]
-    );
-    
+    out.uv = float2((in.position.x + 1.0) * 0.5,
+                    (in.position.y + 1.0) * 0.5);
     return out;
 }
 
-// Fragment Shader: Renders water and sky with dynamic effects
+// Render water and sky with dynamic effects
 fragment float4 waterFragmentShader(VertexOut in [[stage_in]], constant TimeUniforms& timeUniforms [[buffer(1)]]) {
     float2 uv = in.uv;
     float time = timeUniforms.time;
@@ -52,43 +45,34 @@ fragment float4 waterFragmentShader(VertexOut in [[stage_in]], constant TimeUnif
         
         // Calculate cloud height gradient
         float cloudGradient = (in.uv.y - waterLine) / (1.0 - waterLine);
-        float cloudMask = smoothstep(0.3, 0.8, cloudGradient);  // Wider, softer transition
+        float cloudMask = smoothstep(0.3, 0.8, cloudGradient);
         
-        // Position clouds in upper sky area with gradual fade
+        // Position the clouds in the upper sky
         clouds += cloudShape(uv, float2(0.5, 0.95) + drift, 2.2, time) * 0.9;
         clouds += cloudShape(uv, float2(0.45, 0.92) - drift * 1.1, 1.8, time + 2.5) * 0.8;
         clouds += cloudShape(uv, float2(0.55, 0.93) + drift * 0.8, 1.9, time + 5.0) * 0.85;
         
-        // Add subtle variation
         float variation = cloudNoise(uv * 3.0 + drift, time * 0.5) * 0.15;
         clouds += variation;
-        
-        // Sharper separation between individual clouds
         clouds = smoothstep(0.3, 0.7, clouds);
         clouds = min(clouds, 0.9);
         
         // Apply smooth height-based fade
-        clouds *= cloudMask * cloudMask;  // Square it for smoother falloff
-        
-        // Extra smooth transition at the bottom of clouds
+        clouds *= cloudMask * cloudMask;
         float fadeBottom = smoothstep(0.3, 0.6, cloudGradient);
         clouds *= fadeBottom;
-        
-        // Pure white clouds over light blue sky
         float3 cloudColor = float3(1.0, 1.0, 1.0);
         finalColor = mix(skyColor, cloudColor, clouds);
     } else {  // Water
-        // Calculate darkness based on depth with transition to pitch black at 200m
-        float normalizedDepth = depth * 200.0;  // Convert from 0-1 to 0-200m range
-        
-        // Create extremely gradual transition to darkness
+        // Gradual transition to darkness
+        float normalizedDepth = depth * 200.0;
         float depthDarkness;
-        if (normalizedDepth < 40.0) {  // Very gradual darkening until 40m
-            depthDarkness = 1.0 - (normalizedDepth / 40.0) * 0.05;  // Super slow initial darkening
-        } else if (normalizedDepth < 150.0) {  // Gradual darkening from 40m to 150m
+        if (normalizedDepth < 40.0) {
+            depthDarkness = 1.0 - (normalizedDepth / 40.0) * 0.05;
+        } else if (normalizedDepth < 150.0) {
             float midTransition = (normalizedDepth - 40.0) / 110.0;
-            depthDarkness = 0.95 - (midTransition * 0.25);  // Start from 95% light, go to 70%
-        } else {  // Final transition to black in last 50m (150-200m)
+            depthDarkness = 0.95 - (midTransition * 0.25);
+        } else {
             float transitionRange = (normalizedDepth - 150.0) / 50.0;
             depthDarkness = 0.7 * (1.0 - transitionRange);  // Final fade from 70% to black
         }

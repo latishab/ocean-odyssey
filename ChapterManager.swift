@@ -53,12 +53,9 @@ class ChapterManager: ObservableObject {
         let previousChapter = currentChapter
         currentChapter = chapter
         
-        // Reset depth when changing chapters unless specific transition case
-        if previousChapter == .colorAndLight && chapter == .pressureAndLife && depth >= 0.9 {
-            // Keep current depth if transitioning at deep point
-        } else {
-            depth = 0.0  // Start at surface for both chapters
-        }
+        // NOTE: - Reset depths when changing chapters
+        depth = 0.0
+        currentPressureDepth = 0.0
         
         // Update discoveries
         switch chapter {

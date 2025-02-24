@@ -4,34 +4,55 @@ import QuartzCore
 import MetalKit
 
 class OceanView: UIView {
+    // MARK: - Metal Properties
     private var device: MTLDevice!
     private var commandQueue: MTLCommandQueue!
     private var metalLayer: CAMetalLayer!
     
-    private var vertexBuffer: MTLBuffer!
-    private var indexBuffer: MTLBuffer!
-    
     private var pipelineState: MTLRenderPipelineState!
+    private var boatPipelineState: MTLRenderPipelineState!
     private var depthStencilState: MTLDepthStencilState!
     
+    // MARK: - Buffers and Textures
+    private var vertexBuffer: MTLBuffer!
+    private var indexBuffer: MTLBuffer!
+    private var timeUniformsBuffer: MTLBuffer!
+    private var boatUniformsBuffer: MTLBuffer!
+    private var depthTexture: MTLTexture?
+    private var boatTexture: MTLTexture?
+    
+    // MARK: - Animation Properties
+    private var displayLink: CADisplayLink?
     private var time: Float = 0.0
+    
+    // MARK: - Water Properties
+    private var currentDepth: Float = 0.0 {
+        didSet { updateWaterPhysics() }
+    }
+    private var sunAngle: Float = Float.pi / 4
+    private var waveHeight: Float = 0.08
+    private var swellDirection: SIMD2<Float> = SIMD2<Float>(1.0, 1.0)
+    private var swellHeight: Float = 0.08
+    private var swellFrequency: Float = 0.4
+    private var swellPhase: Float = 0.0
+    
+    // MARK: - Boat Properties
+    private var boatPosition: SIMD2<Float> = SIMD2<Float>(0.9, 0.5)
+    private var boatSize: SIMD2<Float> = SIMD2<Float>(0.2, 0.1)
+    
+    // MARK: - Color Ball Properties
+    private var colorBallDepth: Float = 0.0
+    
+    // MARK: - Public Properties
     var depth: Float {
         get { return currentDepth }
         set { currentDepth = newValue }
     }
     
-    private var currentDepth: Float = 0.0 {
-        didSet {
-            updateWaterPhysics()
-        }
-    }
-    
-    private var sunAngle: Float = Float.pi / 4  // 45 degrees default
-    private var waveHeight: Float = 0.08        // Default wave height
-    
+    // MARK: - Uniform Structures
     struct TimeUniforms {
         var time: Float
-        var depth: Float        // This controls camera position
+        var depth: Float
         var swellDirection: SIMD2<Float>
         var swellHeight: Float
         var swellFrequency: Float
@@ -40,44 +61,24 @@ class OceanView: UIView {
         var pressure: Float
     }
     
-    private var timeUniformsBuffer: MTLBuffer!
-    private var depthTexture: MTLTexture?
-    
-    private var swellDirection: SIMD2<Float> = SIMD2<Float>(1.0, 1.0)
-    private var swellHeight: Float = 0.08
-    private var swellFrequency: Float = 0.4
-    private var swellPhase: Float = 0.0
-
-    private var boatTexture: MTLTexture?
-    private var boatPosition: SIMD2<Float> = SIMD2<Float>(0.9, 0.5)   // Changed from (0.5, 0.5) to (0.75, 0.5)
-    private var boatSize: SIMD2<Float> = SIMD2<Float>(0.2, 0.1)     // Width is twice the height
-
     struct BoatUniforms {
         var position: SIMD2<Float>
         var size: SIMD2<Float>
         var rotation: Float
     }
-
-    private var boatUniformsBuffer: MTLBuffer!
-
-    private var boatPipelineState: MTLRenderPipelineState!
-
-    private var displayLink: CADisplayLink?
-
-    private var colorBallDepth: Float = 0.0
-
-    // Calculate pressure in atmospheres (atm) based on depth
-    private func calculatePressure(atDepth depth: Float) -> Float {
-        // Pressure increases with depth (1 atm per 10m)
-        let depthInMeters = depth * 200.0  // Convert to meters (0-200m range)
-        let pressureAtm = 1.0 + (depthInMeters / 10.0)  // 1 atm at surface, +1 atm per 10m
-        return pressureAtm
-    }
     
+    // MARK: - Initialization
     override init(frame: CGRect) {
         super.init(frame: frame)
-        
-        // Create metal layer only once during initialization
+        setupInitialState()
+    }
+    
+    required init?(coder: NSCoder) {
+        fatalError("init(coder:) has not been implemented")
+    }
+    
+    // MARK: - Setup Methods
+    private func setupInitialState() {
         metalLayer = CAMetalLayer()
         layer.addSublayer(metalLayer)
         
@@ -87,11 +88,7 @@ class OceanView: UIView {
         displayLink = CADisplayLink(target: self, selector: #selector(gameLoop))
         displayLink?.add(to: .current, forMode: .default)
     }
-
-    required init?(coder: NSCoder) {
-        fatalError("init(coder:) has not been implemented")
-    }
-
+    
     func setupMetal() {
         guard let device = MTLCreateSystemDefaultDevice() else {
             fatalError("Metal is not supported on this device.")
@@ -260,8 +257,6 @@ class OceanView: UIView {
     
     override func layoutSubviews() {
         super.layoutSubviews()
-        
-        // Only update the frame, don't create new layers
         metalLayer.frame = bounds
         createDepthTexture()
     }
@@ -287,7 +282,7 @@ class OceanView: UIView {
         depthTexture = texture
     }
     
-    func updateWaterPhysics() {
+    private func updateWaterPhysics() {
         time += 0.01
         swellPhase += 0.003
         
@@ -297,9 +292,12 @@ class OceanView: UIView {
         let heightVariation = sin(swellPhase * 0.05) * 0.02
         let currentSwellHeight = waveHeight + heightVariation
         
-        // Calculate pressure based on depth
         let pressure = (currentDepth / 10.0) + 1.0
         
+        updateTimeUniforms(pressure: pressure, currentSwellHeight: currentSwellHeight)
+    }
+    
+    private func updateTimeUniforms(pressure: Float, currentSwellHeight: Float) {
         var timeUniforms = TimeUniforms(
             time: time,
             depth: currentDepth,
@@ -443,5 +441,12 @@ class OceanView: UIView {
         
         // Trigger a redraw
         setNeedsDisplay()
+    }
+
+    private func calculatePressure(atDepth depth: Float) -> Float {
+        // Pressure increases with depth (1 atm per 10m)
+        let depthInMeters = depth * 200.0  // Convert to meters (0-200m range)
+        let pressureAtm = 1.0 + (depthInMeters / 10.0)  // 1 atm at surface, +1 atm per 10m
+        return pressureAtm
     }
 }

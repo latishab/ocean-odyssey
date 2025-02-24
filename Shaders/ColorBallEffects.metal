@@ -1,47 +1,36 @@
 #include "ShaderFunctions.h"
 
+// Deform ball shape based on water pressure
 float3 applyPressureDeformation(float3 position, float2 ballPos, float pressure, float colorBallDepth) {
-    // Only apply deformation to vertices near the color ball's depth
     float distanceFromBall = abs(position.y - colorBallDepth);
-    float deformationFactor = 1.0; // Apply full deformation
-    
-    // Much stronger deformation
-    float verticalCompression = 1.0 - (pressure - 1.0) * 0.15; // 3x stronger compression
-    verticalCompression = max(verticalCompression, 0.3); // Allow more extreme compression
-    
-    // Expand horizontally more to maintain volume
+    float deformationFactor = 1.0;
+    float verticalCompression = max(1.0 - (pressure - 1.0) * 0.15, 0.3);
     float horizontalExpansion = 1.0 + (pressure - 1.0) * 0.1;
     
-    // Apply compression only to the ball
     if (distanceFromBall < 0.1) {
-        // Compress vertically (y-axis)
         position.y = mix(position.y,
                         colorBallDepth + (position.y - colorBallDepth) * verticalCompression,
                         deformationFactor);
-        
-        // Expand horizontally (x-axis) to maintain volume
         position.x = mix(position.x,
                         ballPos.x + (position.x - ballPos.x) * horizontalExpansion,
                         deformationFactor);
     }
-    
     return position;
 }
 
-// NOTE: Gradual color absorption is handled in the fragment shader
+// Calculate color absorption at different depths
 float3 calculateColorAtDepth(float3 originalColor, float depth) {
-    // Scale depth to 200m range for full sunlight zone
-    float scaledDepth = depth * 200.0;  // 200m range
-    // Even more gradual color absorption rates
-    float redLoss = exp(-scaledDepth * 0.02);    // Red disappears ~50m
-    float greenLoss = exp(-scaledDepth * 0.01);   // Green persists to ~100m
-    float blueLoss = exp(-scaledDepth * 0.005);   // Blue persists to ~150m
-    
-    return originalColor * float3(redLoss, greenLoss, blueLoss);
+    float scaledDepth = depth * 200.0;
+    return originalColor * float3(
+        exp(-scaledDepth * 0.02),  // Red: ~50m
+        exp(-scaledDepth * 0.01),  // Green: ~100m
+        exp(-scaledDepth * 0.005)  // Blue: ~150m
+    );
 }
 
-// NOTE: Colors are fully absorbed by 200m
-float3 drawColorBall(float2 uv, float2 ballPos, float3 backgroundColor, float depth, constant TimeUniforms& uniforms) {
+// Draw the color ball with pressure deformation and color absorption
+float3 drawColorBall(float2 uv, float2 ballPos, float3 backgroundColor, float depth,
+                    constant TimeUniforms& uniforms) {
     float pressure = uniforms.pressure;
     float baseRadius = 0.05;
     
@@ -55,24 +44,18 @@ float3 drawColorBall(float2 uv, float2 ballPos, float3 backgroundColor, float de
     // Calculate offset from ball center
     float2 offset = uv - ballPos;
     
-    // Calculate pinch based on vertical position
+    // MARK: - Calculate the pinch effect
     float yFactor = abs(offset.y/b);  // 0 at middle, 1 at top/bottom
-    float pinchAmount = compressionFactor * 0.8;  // Adjusted for better pinch control
-    
-    // Create apple-core shape: narrow in middle, wider at top/bottom
-    float xScale = 1.0 - pinchAmount * (1.0 - pow(yFactor, 2.0));  // Inverted the formula
-    xScale = max(xScale, 0.2);  // Prevent excessive pinching
-    
-    // Apply the pinched scaling
+    float pinchAmount = compressionFactor * 0.8;
+    float xScale = 1.0 - pinchAmount * (1.0 - pow(yFactor, 2.0));
+    xScale = max(xScale, 0.2);
     float2 normalizedOffset = float2(
         offset.x / (a * xScale),  // X gets pinched inward at middle
         offset.y / b              // Y just gets compressed
     );
-    
-    // Keep basic circle/ellipse shape
+
     float horizontalExp = 2.0;
     float verticalExp = 2.0;
-    
     float horizontalTerm = pow(abs(normalizedOffset.x), horizontalExp);
     float verticalTerm = pow(abs(normalizedOffset.y), verticalExp);
     

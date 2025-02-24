@@ -3,12 +3,10 @@
 //------------------------------------------------------------------------------
 // Noise Generation Functions
 //------------------------------------------------------------------------------
-// Basic noise function for creating organic patterns
+// Basic noise for organic patterns
 float noise(float2 p) {
     float2 i = floor(p);
     float2 f = fract(p);
-    
-    // Smoothstep for softer clouds
     f = f * f * (3.0 - 2.0 * f);
     
     float a = length(random2(i));
@@ -21,13 +19,12 @@ float noise(float2 p) {
               f.y);
 }
 
-// Fractal Brownian Motion - creates natural-looking noise patterns
+// Create natural-looking cloud patterns
 float fbm(float2 p, float time) {
     float value = 0.0;
     float amplitude = 0.5;
     float2 shift = float2(time * 0.01, time * 0.02);
     
-    // Add multiple layers of noise for cloud-like patterns
     for (int i = 0; i < 4; i++) {
         value += amplitude * noise(p);
         p = p * 2.0 + shift;
@@ -50,6 +47,7 @@ float cloudDetailNoise(float2 uv, float time) {
     return noise;
 }
 
+// Generate cloud shapes with natural edges
 float cloudShape(float2 uv, float2 center, float scale, float time) {
     float2 cloudUV = (uv - center) * scale;
     

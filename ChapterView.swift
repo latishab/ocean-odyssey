@@ -79,7 +79,13 @@ struct ChapterView: View {
         case .finalQuiz:
             targetDepth = 0.0  // Quiz doesn't need depth interaction
         }
+        
+        // NOTE: -Reset both depth values
         depth = targetDepth
+        if let oceanView = chapterManager.oceanView {
+            oceanView.setColorBallDepth(0)  // Reset color ball position
+            oceanView.setDepth(0)  // Reset ocean view depth
+        }
     }
     
     private func handleExperiment(_ experiment: Experiment, value: Float) {
